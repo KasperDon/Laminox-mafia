@@ -35,8 +35,10 @@ async def cb_wizard(call: CallbackQuery, bot: Bot):
     step = parts[2]
     value = int(parts[3])
 
-    if not await _is_admin(bot, chat_id, call.from_user.id):
-        await call.answer("❌ Faqat admin sozlaydi.", show_alert=True)
+    # Wizard — o'yin yaratgan odam yoki admin
+    game = await db.get_game(chat_id)
+    if not await _is_creator_or_admin(bot, chat_id, call.from_user.id, game):
+        await call.answer("❌ Faqat o'yin boshlovchisi yoki admin.", show_alert=True)
         return
 
     from handlers.commands import get_setup, clear_setup, _time_keyboard
@@ -208,8 +210,9 @@ def _dist_text(dist: dict, player_count: int) -> str:
 @router.callback_query(F.data.startswith("startgame:"))
 async def cb_start_game_button(call: CallbackQuery, bot: Bot):
     chat_id = int(call.data.split(":")[1])
-    if not await _is_admin(bot, chat_id, call.from_user.id):
-        await call.answer("❌ Faqat admin boshlaydi.", show_alert=True)
+    game = await db.get_game(chat_id)
+    if not await _is_creator_or_admin(bot, chat_id, call.from_user.id, game):
+        await call.answer("❌ Faqat o'yin boshlovchisi yoki admin.", show_alert=True)
         return
     await call.answer()
     await _do_start_game(call.message, bot, chat_id)
@@ -248,8 +251,9 @@ async def _do_start_game(message: Message, bot: Bot, chat_id: int):
 async def cb_rdist_add(call: CallbackQuery, bot: Bot):
     parts = call.data.split(":")
     chat_id, role_val = int(parts[1]), parts[2]
-    if not await _is_admin(bot, chat_id, call.from_user.id):
-        await call.answer("❌ Faqat admin.", show_alert=True); return
+    game = await db.get_game(chat_id)
+    if not await _is_creator_or_admin(bot, chat_id, call.from_user.id, game):
+        await call.answer("❌ Faqat o'yin boshlovchisi yoki admin.", show_alert=True); return
 
     role_type = RoleType(role_val)
     dist = _custom_dist.get(chat_id, {})
@@ -269,8 +273,9 @@ async def cb_rdist_add(call: CallbackQuery, bot: Bot):
 async def cb_rdist_rm(call: CallbackQuery, bot: Bot):
     parts = call.data.split(":")
     chat_id, role_val = int(parts[1]), parts[2]
-    if not await _is_admin(bot, chat_id, call.from_user.id):
-        await call.answer("❌ Faqat admin.", show_alert=True); return
+    game = await db.get_game(chat_id)
+    if not await _is_creator_or_admin(bot, chat_id, call.from_user.id, game):
+        await call.answer("❌ Faqat o'yin boshlovchisi yoki admin.", show_alert=True); return
 
     role_type = RoleType(role_val)
     dist = _custom_dist.get(chat_id, {})
@@ -288,8 +293,9 @@ async def cb_rdist_rm(call: CallbackQuery, bot: Bot):
 @router.callback_query(F.data.startswith("rdist_mafia_add:"))
 async def cb_rdist_mafia_add(call: CallbackQuery, bot: Bot):
     chat_id = int(call.data.split(":")[1])
-    if not await _is_admin(bot, chat_id, call.from_user.id):
-        await call.answer("❌ Faqat admin.", show_alert=True); return
+    game = await db.get_game(chat_id)
+    if not await _is_creator_or_admin(bot, chat_id, call.from_user.id, game):
+        await call.answer("❌ Faqat o'yin boshlovchisi yoki admin.", show_alert=True); return
 
     dist = _custom_dist.get(chat_id, {})
     players = await db.get_players(chat_id)
@@ -307,8 +313,9 @@ async def cb_rdist_mafia_add(call: CallbackQuery, bot: Bot):
 @router.callback_query(F.data.startswith("rdist_mafia_rm:"))
 async def cb_rdist_mafia_rm(call: CallbackQuery, bot: Bot):
     chat_id = int(call.data.split(":")[1])
-    if not await _is_admin(bot, chat_id, call.from_user.id):
-        await call.answer("❌ Faqat admin.", show_alert=True); return
+    game = await db.get_game(chat_id)
+    if not await _is_creator_or_admin(bot, chat_id, call.from_user.id, game):
+        await call.answer("❌ Faqat o'yin boshlovchisi yoki admin.", show_alert=True); return
 
     dist = _custom_dist.get(chat_id, {})
     players = await db.get_players(chat_id)
@@ -326,8 +333,9 @@ async def cb_rdist_mafia_rm(call: CallbackQuery, bot: Bot):
 @router.callback_query(F.data.startswith("rdist_auto:"))
 async def cb_rdist_auto(call: CallbackQuery, bot: Bot):
     chat_id = int(call.data.split(":")[1])
-    if not await _is_admin(bot, chat_id, call.from_user.id):
-        await call.answer("❌ Faqat admin.", show_alert=True); return
+    game = await db.get_game(chat_id)
+    if not await _is_creator_or_admin(bot, chat_id, call.from_user.id, game):
+        await call.answer("❌ Faqat o'yin boshlovchisi yoki admin.", show_alert=True); return
 
     from roles import get_role_distribution
     players = await db.get_players(chat_id)
@@ -340,8 +348,9 @@ async def cb_rdist_auto(call: CallbackQuery, bot: Bot):
 @router.callback_query(F.data.startswith("rdist_confirm:"))
 async def cb_rdist_confirm(call: CallbackQuery, bot: Bot):
     chat_id = int(call.data.split(":")[1])
-    if not await _is_admin(bot, chat_id, call.from_user.id):
-        await call.answer("❌ Faqat admin.", show_alert=True); return
+    game = await db.get_game(chat_id)
+    if not await _is_creator_or_admin(bot, chat_id, call.from_user.id, game):
+        await call.answer("❌ Faqat o'yin boshlovchisi yoki admin.", show_alert=True); return
 
     dist = _custom_dist.get(chat_id)
     players = await db.get_players(chat_id)
@@ -936,3 +945,11 @@ async def _is_admin(bot: Bot, chat_id: int, user_id: int) -> bool:
         return member.status in ("administrator", "creator")
     except Exception:
         return False
+
+
+async def _is_creator_or_admin(bot: Bot, chat_id: int, user_id: int,
+                                game: db.Game | None) -> bool:
+    """O'yin yaratgan odam yoki guruh admini."""
+    if game and game.created_by == user_id:
+        return True
+    return await _is_admin(bot, chat_id, user_id)

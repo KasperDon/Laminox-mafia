@@ -70,10 +70,10 @@ async def cmd_stats(message: Message):
 async def cmd_help(message: Message):
     await message.answer(
         "📖 <b>Buyruqlar</b>\n\n"
-        "/newgame — Yangi o'yin (admin)\n"
-        "/cancelgame — O'yinni bekor qilish (admin)\n"
+        "/newgame — Yangi o'yin (har kim)\n"
+        "/cancelgame — O'yinni bekor qilish (faqat admin)\n"
         "/status — O'yin holati\n"
-        "/settings — Vaqt sozlamalari (admin)",
+        "/settings — Vaqt sozlamalari (faqat admin)",
         parse_mode="HTML"
     )
 
@@ -85,10 +85,7 @@ async def cmd_newgame(message: Message, bot: Bot):
     chat_id = message.chat.id
     user = message.from_user
 
-    if not await _is_admin(bot, chat_id, user.id):
-        await message.answer("❌ Bu buyruq faqat guruh adminlari uchun.")
-        return
-
+    # /newgame — har qanday a'zo boshlashi mumkin
     if not await check_bot_is_admin(bot, chat_id):
         await message.answer(
             "⚠️ <b>Bot admin emas!</b>\n\n"
