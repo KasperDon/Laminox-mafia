@@ -62,6 +62,13 @@ class VoteAction:
 # ─── Init ─────────────────────────────────────────────────────────────────────
 
 async def init_db() -> None:
+    # DB papkasi mavjud bo'lmasa yaratish (Railway volume uchun)
+    import os
+    db_dir = os.path.dirname(settings.DATABASE_PATH)
+    if db_dir and not os.path.exists(db_dir):
+        os.makedirs(db_dir, exist_ok=True)
+        logger.info("Created database directory: %s", db_dir)
+
     async with aiosqlite.connect(settings.DATABASE_PATH) as db:
         # WAL mode — bir vaqtda ko'p connection muammosini hal qiladi
         await db.execute("PRAGMA journal_mode=WAL")

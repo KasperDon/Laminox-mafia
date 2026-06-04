@@ -3,12 +3,20 @@ from pydantic_settings import BaseSettings
 from pydantic import Field
 
 
+def _default_db_path() -> str:
+    """Railway volume bo'lsa /data, aks holda joriy papkada."""
+    path = os.getenv("DATABASE_PATH", "")
+    if path:
+        return path
+    # /data papkasi mavjud bo'lsa (Railway volume)
+    if os.path.isdir("/data"):
+        return "/data/mafia.db"
+    return "mafia.db"
+
+
 class Settings(BaseSettings):
     BOT_TOKEN: str
-
-    # Railway Volume /data ga mount qilinadi, local da oddiy fayl
-    DATABASE_PATH: str = os.getenv("DATABASE_PATH", "/data/mafia.db"
-                                    if os.path.isdir("/data") else "mafia.db")
+    DATABASE_PATH: str = _default_db_path()
 
     DEFAULT_DAY_TIME: int = Field(default=300, ge=30, le=3600)
     DEFAULT_VOTE_TIME: int = Field(default=120, ge=30, le=600)
