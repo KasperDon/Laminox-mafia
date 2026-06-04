@@ -1,0 +1,15 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Dependencylarni o'rnatish
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Kod nusxalash
+COPY . .
+
+# Ma'lumotlar bazasi uchun papka
+RUN mkdir -p /app/data
+
+CMD ["python", "bot.py"]
