@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     BOT_TOKEN: str
     DATABASE_PATH: str = _default_db_path()
 
+    # Bot egasining Telegram ID si (statistika uchun)
+    # Telegram da @userinfobot ga /start yozib ID ni bilib oling
+    OWNER_ID: int = 0
+
     DEFAULT_DAY_TIME: int = Field(default=300, ge=30, le=3600)
     DEFAULT_VOTE_TIME: int = Field(default=120, ge=30, le=600)
     DEFAULT_NIGHT_TIME: int = Field(default=60, ge=30, le=300)

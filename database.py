@@ -413,3 +413,53 @@ async def has_voted(game_id: int, round_number: int, voter_user_id: int) -> bool
             (game_id, round_number, voter_user_id)
         ) as cur:
             return await cur.fetchone() is not None
+
+
+# ─── Statistika ───────────────────────────────────────────────────────────────
+
+async def get_stats() -> dict:
+    """Bot umumiy statistikasi."""
+    async with aiosqlite.connect(settings.DATABASE_PATH) as db:
+        # Jami o'yinlar
+        async with db.execute("SELECT COUNT(*) FROM games") as cur:
+            total_games = (await cur.fetchone())[0]
+
+        # Tugallangan o'yinlar
+        async with db.execute(
+            "SELECT COUNT(*) FROM games WHERE state='game_over'"
+        ) as cur:
+            finished_games = (await cur.fetchone())[0]
+
+        # Faol o'yinlar
+        async with db.execute(
+            "SELECT COUNT(*) FROM games WHERE state NOT IN ('idle','game_over')"
+        ) as cur:
+            active_games = (await cur.fetchone())[0]
+
+        # Jami unikal o'yinchilar
+        async with db.execute(
+            "SELECT COUNT(DISTINCT user_id) FROM players"
+        ) as cur:
+            total_players = (await cur.fetchone())[0]
+
+        # Jami guruhlar (o'yin bo'lgan)
+        async with db.execute(
+            "SELECT COUNT(DISTINCT chat_id) FROM games"
+        ) as cur:
+            total_chats = (await cur.fetchone())[0]
+
+        # So'nggi 24 soatdagi o'yinlar
+        async with db.execute(
+            "SELECT COUNT(*) FROM games "
+            "WHERE created_at >= datetime('now', '-1 day')"
+        ) as cur:
+            games_today = (await cur.fetchone())[0]
+
+    return {
+        "total_games": total_games,
+        "finished_games": finished_games,
+        "active_games": active_games,
+        "total_players": total_players,
+        "total_chats": total_chats,
+        "games_today": games_today,
+    }

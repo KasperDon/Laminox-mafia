@@ -44,6 +44,28 @@ async def cmd_start(message: Message):
         await message.answer("🎮 Yangi o'yin uchun: /newgame")
 
 
+@router.message(Command("stats"))
+async def cmd_stats(message: Message):
+    """Faqat bot egasi ko'ra oladi."""
+    from config import settings
+    from database import get_stats
+
+    if settings.OWNER_ID and message.from_user.id != settings.OWNER_ID:
+        return  # Boshqalarga ko'rinmasin
+
+    stats = await get_stats()
+    await message.answer(
+        f"📊 <b>Bot statistikasi</b>\n\n"
+        f"🎮 Jami o'yinlar: <b>{stats['total_games']}</b>\n"
+        f"✅ Tugallangan: <b>{stats['finished_games']}</b>\n"
+        f"🔄 Faol: <b>{stats['active_games']}</b>\n"
+        f"📅 Bugun: <b>{stats['games_today']}</b>\n\n"
+        f"👥 Unikal o'yinchilar: <b>{stats['total_players']}</b>\n"
+        f"💬 Guruhlar: <b>{stats['total_chats']}</b>",
+        parse_mode="HTML"
+    )
+
+
 @router.message(Command("help"))
 async def cmd_help(message: Message):
     await message.answer(
