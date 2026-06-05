@@ -498,6 +498,13 @@ async def _start_day_phase(message: Message, bot: Bot, chat_id: int, round_numbe
 
 
 async def _end_day_phase(message: Message, bot: Bot, chat_id: int):
+    try:
+        await _end_day_phase_inner(message, bot, chat_id)
+    except Exception as e:
+        logger.exception("_end_day_phase crashed (chat %d): %s", chat_id, e)
+
+
+async def _end_day_phase_inner(message: Message, bot: Bot, chat_id: int):
     game = await db.get_game(chat_id)
     if not game or game.state != GameState.DAY_DISCUSSION:
         return
@@ -617,6 +624,13 @@ async def cb_skip_vote(call: CallbackQuery):
 
 
 async def _end_vote_phase(message: Message, bot: Bot, chat_id: int):
+    try:
+        await _end_vote_phase_inner(message, bot, chat_id)
+    except Exception as e:
+        logger.exception("_end_vote_phase crashed (chat %d): %s", chat_id, e)
+
+
+async def _end_vote_phase_inner(message: Message, bot: Bot, chat_id: int):
     game = await db.get_game(chat_id)
     if not game or game.state != GameState.DAY_VOTING:
         logger.warning("_end_vote_phase skipped: state=%s", game.state if game else "no game")
@@ -678,49 +692,77 @@ async def _end_vote_phase(message: Message, bot: Bot, chat_id: int):
         parse_mode="HTML"
     )
 
-    # Race condition oldini olish: state ni DISTRIBUTING ga o'tkazamiz
-    # (shunday timer qaytadan _end_vote_phase chaqira olmaydi)
+    # Race condition oldini olish: state DISTRIBUTING ga o'tadi
     await db.update_game_state(chat_id, GameState.DISTRIBUTING)
 
-    # So'nggi so'z (30s) — eliminated bo'lsa
-    if eliminated:
-        await _give_last_words(bot, chat_id, [eliminated], message)
-
-    # G'olibni tekshirish
-    win = await check_win_condition(chat_id)
-    if win:
-        await _announce_winner(message, bot, chat_id, win)
-        return
-
-    # Tun bosqichiga o'tish
-    await _start_night_phase(message, bot, chat_id)
+    # So'nggi so'z + keyingi bosqich — background task sifatida
+    # (blocking qilmaymiz — restart bo'lsa ham game tiklanadi)
+    asyncio.create_task(
+        _last_words_then_night(bot, chat_id, [eliminated] if eliminated else [], message)
+    )
 
 
-# ─── So'nggi so'z ─────────────────────────────────────────────────────────────
+# ─── So'nggi so'z (background tasks) ────────────────────────────────────────
 
 LAST_WORDS_SECONDS = 30
 
-async def _give_last_words(bot: Bot, chat_id: int,
-                            dead_players: list, message: Message) -> None:
-    """
-    O'ldirilgan o'yinchilarga guruhda 30 soniya so'nggi so'z imkonini beradi.
-    Shundan keyin ular kuzatuvchi bo'lib qoladi (guruhni o'qiy oladi, yoza olmaydi).
-    """
+
+async def _announce_last_words(bot: Bot, chat_id: int,
+                                dead_players: list, message: Message) -> None:
+    """So'nggi so'z xabarini yuboradi va 30s ochiq ushlab turadi."""
     if not dead_players:
         return
-
     await unlock_chat(bot, chat_id)
-
     mentions = " ".join(player_mention(p) for p in dead_players)
-    await message.answer(
-        f"💀 {mentions}\n\n"
-        f"⏳ <b>{LAST_WORDS_SECONDS} soniya — so'nggi so'zingizni ayting!</b>\n"
-        f"Shundan keyin siz kuzatuvchi sifatida davom etasiz 👁",
-        parse_mode="HTML"
-    )
-
+    try:
+        await bot.send_message(
+            chat_id,
+            f"💀 {mentions}\n\n"
+            f"⏳ <b>{LAST_WORDS_SECONDS} soniya — so'nggi so'zingizni ayting!</b>\n"
+            f"Shundan keyin siz kuzatuvchi sifatida davom etasiz 👁",
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        logger.warning("Last words message failed: %s", e)
     await asyncio.sleep(LAST_WORDS_SECONDS)
     await lock_chat(bot, chat_id)
+
+
+async def _last_words_then_night(bot: Bot, chat_id: int,
+                                  dead_players: list, message: Message) -> None:
+    """So'nggi so'z → g'olib tekshirish → tun."""
+    try:
+        await _announce_last_words(bot, chat_id, dead_players, message)
+        win = await check_win_condition(chat_id)
+        if win:
+            await _announce_winner(message, bot, chat_id, win)
+            return
+        await _start_night_phase(message, bot, chat_id)
+    except Exception as e:
+        logger.exception("Error in _last_words_then_night (chat %d): %s", chat_id, e)
+        # Xato bo'lsa ham o'yinni davom ettirishga harakat qilish
+        try:
+            await _start_night_phase(message, bot, chat_id)
+        except Exception as e2:
+            logger.error("Recovery failed for chat %d: %s", chat_id, e2)
+
+
+async def _last_words_then_day(bot: Bot, chat_id: int, dead_players: list,
+                                message: Message, new_round: int) -> None:
+    """So'nggi so'z → g'olib tekshirish → kunduz."""
+    try:
+        await _announce_last_words(bot, chat_id, dead_players, message)
+        win = await check_win_condition(chat_id)
+        if win:
+            await _announce_winner(message, bot, chat_id, win)
+            return
+        await _start_day_phase(message, bot, chat_id, round_number=new_round)
+    except Exception as e:
+        logger.exception("Error in _last_words_then_day (chat %d): %s", chat_id, e)
+        try:
+            await _start_day_phase(message, bot, chat_id, round_number=new_round)
+        except Exception as e2:
+            logger.error("Recovery failed for chat %d: %s", chat_id, e2)
 
 
 # ─── Tun bosqichi ─────────────────────────────────────────────────────────────
@@ -774,6 +816,13 @@ async def _start_night_phase(message: Message, bot: Bot, chat_id: int):
 
 
 async def _end_night_phase(message: Message, bot: Bot, chat_id: int):
+    try:
+        await _end_night_phase_inner(message, bot, chat_id)
+    except Exception as e:
+        logger.exception("_end_night_phase crashed (chat %d): %s", chat_id, e)
+
+
+async def _end_night_phase_inner(message: Message, bot: Bot, chat_id: int):
     game = await db.get_game(chat_id)
     if not game or game.state != GameState.NIGHT:
         logger.warning("_end_night_phase skipped: state=%s", game.state if game else "no game")
@@ -837,19 +886,13 @@ async def _end_night_phase(message: Message, bot: Bot, chat_id: int):
     # Race condition oldini olish: state DISTRIBUTING ga o'tadi
     await db.update_game_state(chat_id, GameState.DISTRIBUTING)
 
-    # O'lgan o'yinchilarga so'nggi so'z imkoni
     dead_players = [player_map[uid] for uid in all_dead if uid in player_map]
-    if dead_players:
-        await _give_last_words(bot, chat_id, dead_players, message)
-
-    # G'olibni tekshirish
-    win = await check_win_condition(chat_id)
-    if win:
-        await _announce_winner(message, bot, chat_id, win)
-        return
-
     new_round = game.round_number + 1
-    await _start_day_phase(message, bot, chat_id, round_number=new_round)
+
+    # So'nggi so'z + keyingi kunduz — background task sifatida
+    asyncio.create_task(
+        _last_words_then_day(bot, chat_id, dead_players, message, new_round)
+    )
 
 
 # ─── G'olibni e'lon qilish ────────────────────────────────────────────────────

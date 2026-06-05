@@ -53,54 +53,65 @@ async def restore_active_games(bot: Bot) -> None:
         logger.info("Restoring game in chat %d | state: %s", game.chat_id, game.state)
 
         if game.state == GameState.WAITING:
-            # Qo'shilish bosqichida qolgan — davom ettiramiz (timer yo'q)
             continue
 
-        if not game.phase_ends_at:
-            # Deadline yo'q — xavfsiz holat uchun keyingi bosqichni boshlash
-            logger.warning("Game %d has no deadline, skipping restore.", game.chat_id)
-            continue
+        chat_id = game.chat_id
 
         try:
+            # DISTRIBUTING — restart paytida so'nggi so'z yoki bosqich oralig'ida qolgan
+            # 5 soniyadan keyin to'g'ridan tun yoki kunduzga o'tkazamiz
+            if game.state == GameState.DISTRIBUTING:
+                from handlers.callbacks import _start_night_phase, _start_day_phase
+                sent = await bot.send_message(
+                    chat_id,
+                    "🔄 Bot qayta ishga tushdi. O'yin davom etmoqda..."
+                )
+                if game.round_number > 0:
+                    # Raund o'rtasida — tunni boshlash
+                    scheduler.schedule(chat_id, 5,
+                        lambda m=sent, b=bot, cid=chat_id: _start_night_phase(m, b, cid))
+                else:
+                    # Birinchi raund boshida — kunduzdan boshlash
+                    scheduler.schedule(chat_id, 5,
+                        lambda m=sent, b=bot, cid=chat_id, r=1: _start_day_phase(m, b, cid, r))
+                continue
+
+            if not game.phase_ends_at:
+                logger.warning("Game %d has no deadline, skipping restore.", game.chat_id)
+                continue
+
             deadline = datetime.fromisoformat(game.phase_ends_at)
             if deadline.tzinfo is None:
                 deadline = deadline.replace(tzinfo=timezone.utc)
             now = datetime.now(timezone.utc)
             remaining = max(5.0, (deadline - now).total_seconds())
 
-            chat_id = game.chat_id
-
             if game.state == GameState.DAY_DISCUSSION:
+                from handlers.callbacks import _end_day_phase
                 sent = await bot.send_message(
                     chat_id,
-                    f"🔄 Bot qayta ishga tushdi. Muhokama {int(remaining)} soniyada tugaydi."
+                    f"🔄 Bot qayta ishga tushdi. Muhokama {int(remaining)}s da tugaydi."
                 )
-                from handlers.callbacks import _end_day_phase
-                scheduler.schedule(
-                    chat_id, int(remaining),
-                    lambda m=sent, b=bot, cid=chat_id: _end_day_phase(m, b, cid)
-                )
+                scheduler.schedule(chat_id, int(remaining),
+                    lambda m=sent, b=bot, cid=chat_id: _end_day_phase(m, b, cid))
 
             elif game.state == GameState.DAY_VOTING:
+                from handlers.callbacks import _end_vote_phase
                 sent = await bot.send_message(
                     chat_id,
-                    f"🔄 Bot qayta ishga tushdi. Ovoz berish {int(remaining)} soniyada tugaydi."
+                    f"🔄 Bot qayta ishga tushdi. Ovoz berish {int(remaining)}s da tugaydi."
                 )
-                from handlers.callbacks import _end_vote_phase
-                scheduler.schedule(
-                    chat_id, int(remaining),
-                    lambda m=sent, b=bot, cid=chat_id: _end_vote_phase(m, b, cid)
-                )
+                scheduler.schedule(chat_id, int(remaining),
+                    lambda m=sent, b=bot, cid=chat_id: _end_vote_phase(m, b, cid))
 
             elif game.state == GameState.NIGHT:
+                from handlers.callbacks import _end_night_phase
                 sent = await bot.send_message(
                     chat_id,
-                    f"🔄 Bot qayta ishga tushdi. Tun {int(remaining)} soniyada tugaydi."
+                    f"🔄 Bot qayta ishga tushdi. Tun {int(remaining)}s da tugaydi."
                 )
-                scheduler.schedule(
-                    chat_id, int(remaining),
-                    lambda m=sent, b=bot, cid=chat_id: _end_night_phase(m, b, cid)
-                )
+                scheduler.schedule(chat_id, int(remaining),
+                    lambda m=sent, b=bot, cid=chat_id: _end_night_phase(m, b, cid))
 
         except Exception as e:
             logger.error("Failed to restore game %d: %s", game.chat_id, e)
