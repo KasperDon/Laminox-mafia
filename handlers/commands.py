@@ -106,8 +106,8 @@ async def cmd_newgame(message: Message, bot: Bot):
         )
         return
 
-    # Vaqt sozlash wizard boshlash
-    _setup[chat_id] = {}
+    # Vaqt sozlash wizard boshlash — creator_id saqlash
+    _setup[chat_id] = {"creator_id": user.id}
     await message.answer(
         "🎮 <b>Yangi o'yin sozlamalari</b>\n\n"
         "☀️ <b>1-qadam: Kunduz muhokama vaqti</b>\n"
@@ -247,6 +247,10 @@ def _time_keyboard(chat_id: int, step: str, options: list[tuple[str, int]]):
 
 def get_setup(chat_id: int) -> dict:
     return _setup.get(chat_id, {})
+
+def get_setup_creator(chat_id: int) -> int:
+    """Wizardni boshlagan odamning user_id si."""
+    return _setup.get(chat_id, {}).get("creator_id", 0)
 
 def clear_setup(chat_id: int):
     _setup.pop(chat_id, None)

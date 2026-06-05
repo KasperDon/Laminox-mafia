@@ -35,13 +35,14 @@ async def cb_wizard(call: CallbackQuery, bot: Bot):
     step = parts[2]
     value = int(parts[3])
 
-    # Wizard — o'yin yaratgan odam yoki admin
-    game = await db.get_game(chat_id)
-    if not await _is_creator_or_admin(bot, chat_id, call.from_user.id, game):
-        await call.answer("❌ Faqat o'yin boshlovchisi yoki admin.", show_alert=True)
-        return
+    from handlers.commands import get_setup, get_setup_creator, clear_setup, _time_keyboard
 
-    from handlers.commands import get_setup, clear_setup, _time_keyboard
+    # Wizard — wizardni boshlagan odam yoki admin
+    setup_creator = get_setup_creator(chat_id)
+    if setup_creator != call.from_user.id:
+        if not await _is_admin(bot, chat_id, call.from_user.id):
+            await call.answer("❌ Faqat o'yin boshlovchisi yoki admin.", show_alert=True)
+            return
     setup = get_setup(chat_id)
     setup[step] = value
     await call.answer()
@@ -950,6 +951,11 @@ async def _is_admin(bot: Bot, chat_id: int, user_id: int) -> bool:
 async def _is_creator_or_admin(bot: Bot, chat_id: int, user_id: int,
                                 game: db.Game | None) -> bool:
     """O'yin yaratgan odam yoki guruh admini."""
+    # DB dagi o'yinda created_by tekshirish
     if game and game.created_by == user_id:
+        return True
+    # _setup dagi wizard creator tekshirish (game yaratilmagan paytda)
+    from handlers.commands import get_setup_creator
+    if get_setup_creator(chat_id) == user_id and user_id != 0:
         return True
     return await _is_admin(bot, chat_id, user_id)
